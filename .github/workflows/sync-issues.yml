@@ -1,0 +1,19 @@
+name: Sync External Issues to Project
+
+on:
+  schedule:
+    # Runs every 6 hours (change or adjust as needed)
+    - cron: '0 */6 * * *'
+  # Allows you to click a button and trigger it manually anytime
+  workflow_dispatch:
+
+jobs:
+  sync-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add recent issues to project
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: "https://github.com/users/grobergl/projects/2"
+          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          labeled: "" # Optional: specify a label if you only want certain issues
