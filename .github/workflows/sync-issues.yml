@@ -2,18 +2,59 @@ name: Sync External Issues to Project
 
 on:
   schedule:
-    # Runs every 6 hours (change or adjust as needed)
     - cron: '0 */6 * * *'
-  # Allows you to click a button and trigger it manually anytime
   workflow_dispatch:
 
 jobs:
   sync-issues:
     runs-on: ubuntu-latest
     steps:
-      - name: Add recent issues to project
-        uses: actions/add-to-project@v1.0.2
-        with:
-          project-url: "https://github.com/users/grobergl/projects/2"
-          github-token: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          labeled: "" # Optional: specify a label if you only want certain issues
+      - name: Fetch and add open issues to project
+        env:
+          GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
+          SOURCE_REPO: "drsamps/MakeTheCase" # e.g. "facebook/react" or "org-name/repo-name"
+          PROJECT_OWNER: "grobergl"
+          PROJECT_NUMBER: 1 # Replace with your project number (as an integer)
+        run: |
+          # 1. Fetch the GraphQL node ID of your User Project
+          PROJECT_ID=$(gh api graphql -f query='
+            query($user: String!, $number: Int!) {
+              user(login: $user) {
+                projectV2(number: $number) {
+                  id
+                }
+              }
+            }
+          ' -F user="$grobergl" -F number=$2 --jq '.data.user.projectV2.id')
+
+          echo "Found Project ID: $PROJECT_ID"
+
+          # 2. Get the list of open issue IDs from the source repository
+          ISSUE_IDS=$(gh api graphql -f query='
+            query($owner: String!, $name: String!) {
+              repository(owner: $owner, name: $name) {
+                issues(first: 50, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
+                  nodes {
+                    id
+                    title
+                  }
+                }
+              }
+            }
+          ' -F owner="${SOURCE_REPO%/*}" -F name="${SOURCE_REPO#*/}" --jq '.data.repository.issues.nodes[].id')
+
+          # 3. Add each issue to your project board (it will automatically skip duplicates)
+          for id in $ISSUE_IDS; do
+            echo "Syncing issue ID: $id"
+            gh api graphql -f query='
+              mutation($project: ID!, $item: ID!) {
+                addProjectV2ItemById(input: {projectId: $project, contentId: $item}) {
+                  item {
+                    id
+                  }
+                }
+              }
+            ' -F project="$PROJECT_ID" -F item="$id" > /dev/null || true
+          done
+
+          echo "Sync completed successfully."
