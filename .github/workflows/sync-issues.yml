@@ -12,49 +12,19 @@ jobs:
       - name: Fetch and add open issues to project
         env:
           GH_TOKEN: ${{ secrets.ADD_TO_PROJECT_PAT }}
-          SOURCE_REPO: "drsamps/MakeTheCase" # e.g. "facebook/react" or "org-name/repo-name"
+          SOURCE_REPO: "drsamps/MakeTheCase"
           PROJECT_OWNER: "grobergl"
-          PROJECT_NUMBER: 1 # Replace with your project number (as an integer)
+          PROJECT_NUMBER: 2
         run: |
-          # 1. Fetch the GraphQL node ID of your User Project
-          PROJECT_ID=$(gh api graphql -f query='
-            query($user: String!, $number: Int!) {
-              user(login: $user) {
-                projectV2(number: $number) {
-                  id
-                }
-              }
-            }
-          ' -F user="$grobergl"  number=$2 --jq '.data.user.projectV2.id')
+          echo "Fetching open issues from $SOURCE_REPO..."
 
-          echo "Found Project ID: $PROJECT_ID"
+          # Fetch URLs of open issues from the external repository
+          ISSUE_URLS=$(gh issue list --repo "$SOURCE_REPO" --state open --limit 50 --json url --jq '.[].url')
 
-          # 2. Get the list of open issue IDs from the source repository
-          ISSUE_IDS=$(gh api graphql -f query='
-            query($owner: String!, $name: String!) {
-              repository(owner: $owner, name: $name) {
-                issues(first: 50, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}) {
-                  nodes {
-                    id
-                    title
-                  }
-                }
-              }
-            }
-          ' -F owner="${SOURCE_REPO%/*}" -F name="${SOURCE_REPO#*/}" --jq '.data.repository.issues.nodes[].id')
-
-          # 3. Add each issue to your project board (it will automatically skip duplicates)
-          for id in $ISSUE_IDS; do
-            echo "Syncing issue ID: $id"
-            gh api graphql -f query='
-              mutation($project: ID!, $item: ID!) {
-                addProjectV2ItemById(input: {projectId: $project, contentId: $item}) {
-                  item {
-                    id
-                  }
-                }
-              }
-            ' -F project="$PROJECT_ID" -F item="$id" > /dev/null || true
+          # Loop through each issue URL and add it directly to your project
+          for url in $ISSUE_URLS; do
+            echo "Adding issue: $url"
+            gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --url "$url" || true
           done
 
           echo "Sync completed successfully."
