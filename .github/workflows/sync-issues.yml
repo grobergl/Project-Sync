@@ -25,7 +25,7 @@ jobs:
                 }
               }
             }
-          ' -F user="$grobergl" -F number=$2 --jq '.data.user.projectV2.id')
+          ' -F user="$grobergl"  number=$2 --jq '.data.user.projectV2.id')
 
           echo "Found Project ID: $PROJECT_ID"
 
